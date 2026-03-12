@@ -1,0 +1,91 @@
+# ETUDY API — Déploiement sur Render.com
+
+## Structure du dossier
+```
+etudy-api/
+├── server.js      ← Serveur Express (toutes les routes)
+├── package.json
+└── .gitignore
+```
+
+## Étapes de déploiement
+
+### 1. Créer un repo GitHub
+```bash
+cd etudy-api
+git init
+git add .
+git commit -m "ETUDY API server"
+git remote add origin https://github.com/TON_USERNAME/etudy-api.git
+git push -u origin main
+```
+
+### 2. Obtenir la clé Service Account Firebase
+- Firebase Console → Paramètres du projet → Comptes de service
+- Cliquer "Générer une nouvelle clé privée"
+- Télécharger le fichier JSON
+- Copier TOUT le contenu du fichier JSON
+
+### 3. Déployer sur Render.com
+1. Aller sur https://render.com → New → Web Service
+2. Connecter votre repo GitHub `etudy-api`
+3. Configurer :
+   - **Name** : `etudy-api`
+   - **Runtime** : `Node`
+   - **Build Command** : `npm install`
+   - **Start Command** : `npm start`
+   - **Plan** : Free
+
+4. Ajouter les variables d'environnement (Environment) :
+   ```
+   FIREBASE_SERVICE_ACCOUNT  = { ...tout le contenu JSON de la clé... }
+   GENIUSPAY_SECRET          = votre_secret_geniuspay
+   API_BASE_URL              = https://etudy-api.onrender.com
+   ```
+
+5. Cliquer "Create Web Service" → attendre 2-3 min
+
+### 4. Mettre à jour les URLs dans le frontend
+
+Remplacer dans tous vos fichiers frontend :
+```
+AVANT  : https://europe-west1-etudy-f869d.cloudfunctions.net/NomFonction
+APRÈS  : https://etudy-api.onrender.com/NomFonction
+```
+
+Routes disponibles :
+- POST https://etudy-api.onrender.com/startArenaSession
+- POST https://etudy-api.onrender.com/submitAnswer
+- POST https://etudy-api.onrender.com/finishArena
+- POST https://etudy-api.onrender.com/initPassPayment
+- POST https://etudy-api.onrender.com/geniusPayWebhook
+- GET  https://etudy-api.onrender.com/getUserPasses
+- POST https://etudy-api.onrender.com/sendAdminNotification
+
+### 5. Créer un fichier .env pour le dev local
+```
+FIREBASE_SERVICE_ACCOUNT={"type":"service_account",...}
+GENIUSPAY_SECRET=xxx
+API_BASE_URL=http://localhost:3001
+PORT=3001
+```
+
+## Notes importantes
+
+- **Plan Free Render** : le serveur "dort" après 15min d'inactivité
+  → Premier appel = ~30s de démarrage (cold start)
+  → Pour éviter ça : utiliser UptimeRobot (gratuit) pour pinger /health toutes les 14min
+
+- **Le webhook GeniusPay** doit pointer vers l'URL Render définitive AVANT de tester les paiements
+
+## Problème des dossiers manquants dans Firestore
+
+Les dossiers `actu`, `anglais`, `chimie`, `français`, etc. sont vides dans le zip
+mais existent sur votre Mac local. Pour les migrer :
+
+```bash
+# Depuis votre projet local (où src/data/ est complet)
+node src/migrationToFirestore_v2.mjs
+```
+
+Cela migrera TOUS les fichiers JSON présents localement.
