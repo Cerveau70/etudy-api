@@ -87,12 +87,26 @@ const FINAL_AFFRONT_SERVER = [
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
 const getOpenManche = () => {
+  // Force le serveur à utiliser le fuseau horaire d'Abidjan (GMT)
   const now = new Date();
-  const sec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+  const abidjanTime = new Intl.DateTimeFormat('fr-FR', {
+    timeZone: 'Africa/Abidjan',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    hour12: false
+  }).formatToParts(now);
+
+  const hours = parseInt(abidjanTime.find(p => p.type === 'hour').value);
+  const minutes = parseInt(abidjanTime.find(p => p.type === 'minute').value);
+  const seconds = parseInt(abidjanTime.find(p => p.type === 'second').value);
+
+  const totalSeconds = hours * 3600 + minutes * 60 + seconds;
+
   return MANCHES.find(m => {
     const s = m.startH * 3600 + m.startM * 60;
     const e = m.endH   * 3600 + m.endM   * 60;
-    return sec >= s && sec < e;
+    return totalSeconds >= s && totalSeconds < e;
   }) ?? null;
 };
 
@@ -560,4 +574,38 @@ app.post('/sendAdminNotification', async (req, res) => {
 /* ── Start ── */
 app.listen(PORT, () => {
   console.log(`✅ ETUDY API running on port ${PORT}`);
+});
+
+/* ══════════════════════════════════════════════
+   8. getMancheStatus (Endpoint pour synchroniser l'heure avec le frontend)
+══════════════════════════════════════════════ */
+app.get('/getMancheStatus', (req, res) => {
+  const now = new Date();
+  // Force le serveur à utiliser le fuseau horaire d'Abidjan (GMT)
+  const abidjanTime = new Intl.DateTimeFormat('fr-FR', {
+    timeZone: 'Africa/Abidjan',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    hour12: false
+  }).formatToParts(now);
+
+  const hours = parseInt(abidjanTime.find(p => p.type === 'hour').value);
+  const minutes = parseInt(abidjanTime.find(p => p.type === 'minute').value);
+  const seconds = parseInt(abidjanTime.find(p => p.type === 'second').value);
+
+  const totalSeconds = hours * 3600 + minutes * 60 + seconds;
+
+  const openManche = MANCHES.find(m => {
+    const s = m.startH * 3600 + m.startM * 60;
+    const e = m.endH   * 3600 + m.endM   * 60;
+    return totalSeconds >= s && totalSeconds < e;
+  }) ?? null;
+
+  res.json({
+    serverTime: now.toISOString(),
+    serverTimeAbidjan: `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')} (Abidjan)`,
+    openManche: openManche,
+    allManches: MANCHES
+  });
 });
