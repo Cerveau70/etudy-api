@@ -50,7 +50,7 @@ const GENIUSPAY_API_URL = 'https://pay.genius.ci/api/v1/merchant';
 
 const MANCHES = [
   { id: 0, startH: 8,  startM: 40, endH: 8,  endM: 55 },   // 08:40 - 08:55
-  { id: 1, startH: 17, startM: 40, endH: 19, endM: 50 },   // 17:40 - 19:50
+  { id: 1, startH: 17, startM: 40, endH: 20, endM: 50 },   // 17:40 - 19:50
   { id: 2, startH: 23, startM: 32, endH: 23, endM: 35 },   // 23:32 - 23:35
 ];
 
