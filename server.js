@@ -147,7 +147,6 @@ app.post('/startArenaSession', async (req, res) => {
     });
 
     const mancheId = Number(req.body.mancheId);
-    console.log("Requested mancheId:", mancheId);
 
 
     const playKey = `${uid}_${todayStr()}_${mancheId}`;
