@@ -16,7 +16,6 @@ import express     from 'express';
 import cors        from 'cors';
 import crypto      from 'crypto';
 import admin       from 'firebase-admin';
-import { createRequire } from 'module';
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
@@ -42,17 +41,9 @@ const MANCHE_DURATION_S    = 420;
 const QUESTIONS_PER_MANCHE = 25;
 const XP_INCORRECT         = -2;
 const XP_FLOOR             = 75;
-const MIN_RESP_MS          = 1500;
-const MAX_RESP_MS          = 30_000;
 
 const GENIUSPAY_SECRET  = process.env.GENIUSPAY_SECRET  || '';
 const GENIUSPAY_API_URL = 'https://pay.genius.ci/api/v1/merchant';
-
-const MANCHES = [
-  { id: 0, startH: 8,  startM: 40, endH: 8,  endM: 55 },   // 08:40 - 08:55
-  { id: 1, startH: 17, startM: 40, endH: 20, endM: 50 },   // 17:40 - 19:50
-  { id: 2, startH: 23, startM: 32, endH: 23, endM: 35 },   // 23:32 - 23:35
-];
 
 const PASS_DEFS = {
   'm-1':       { days: 1,  keys: 1    },
@@ -86,29 +77,6 @@ const FINAL_AFFRONT_SERVER = [
 ══════════════════════════════════════════════ */
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
-const getOpenManche = () => {
-  // Force le serveur à utiliser le fuseau horaire d'Abidjan (GMT)
-  const now = new Date();
-  const abidjanTime = new Intl.DateTimeFormat('fr-FR', {
-    timeZone: 'Africa/Abidjan',
-    hour: 'numeric',
-    minute: 'numeric',
-    second: 'numeric',
-    hour12: false
-  }).formatToParts(now);
-
-  const hours = parseInt(abidjanTime.find(p => p.type === 'hour').value);
-  const minutes = parseInt(abidjanTime.find(p => p.type === 'minute').value);
-  const seconds = parseInt(abidjanTime.find(p => p.type === 'second').value);
-
-  const totalSeconds = hours * 3600 + minutes * 60 + seconds;
-
-  return MANCHES.find(m => {
-    const s = m.startH * 3600 + m.startM * 60;
-    const e = m.endH   * 3600 + m.endM   * 60;
-    return totalSeconds >= s && totalSeconds < e;
-  }) ?? null;
-};
 
 const hasActiveManchePass = async (uid) => {
   const snap = await db
@@ -181,13 +149,6 @@ app.post('/startArenaSession', async (req, res) => {
     const mancheId = Number(req.body.mancheId);
     console.log("Requested mancheId:", mancheId);
 
-    const openManche = getOpenManche();
-    console.log("Current open manche:", openManche);
-    
-    if (!openManche || openManche.id !== mancheId) {
-      console.log("❌ REASON: MANCHE_CLOSED - No open manche or wrong mancheId");
-      return res.status(403).json({ error: 'MANCHE_CLOSED' });
-    }
 
     const playKey = `${uid}_${todayStr()}_${mancheId}`;
     console.log("Play key:", playKey);
@@ -579,33 +540,4 @@ app.listen(PORT, () => {
 /* ══════════════════════════════════════════════
    8. getMancheStatus (Endpoint pour synchroniser l'heure avec le frontend)
 ══════════════════════════════════════════════ */
-app.get('/getMancheStatus', (req, res) => {
-  const now = new Date();
-  // Force le serveur à utiliser le fuseau horaire d'Abidjan (GMT)
-  const abidjanTime = new Intl.DateTimeFormat('fr-FR', {
-    timeZone: 'Africa/Abidjan',
-    hour: 'numeric',
-    minute: 'numeric',
-    second: 'numeric',
-    hour12: false
-  }).formatToParts(now);
 
-  const hours = parseInt(abidjanTime.find(p => p.type === 'hour').value);
-  const minutes = parseInt(abidjanTime.find(p => p.type === 'minute').value);
-  const seconds = parseInt(abidjanTime.find(p => p.type === 'second').value);
-
-  const totalSeconds = hours * 3600 + minutes * 60 + seconds;
-
-  const openManche = MANCHES.find(m => {
-    const s = m.startH * 3600 + m.startM * 60;
-    const e = m.endH   * 3600 + m.endM   * 60;
-    return totalSeconds >= s && totalSeconds < e;
-  }) ?? null;
-
-  res.json({
-    serverTime: now.toISOString(),
-    serverTimeAbidjan: `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')} (Abidjan)`,
-    openManche: openManche,
-    allManches: MANCHES
-  });
-});
