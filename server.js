@@ -49,9 +49,9 @@ const GENIUSPAY_SECRET  = process.env.GENIUSPAY_SECRET  || '';
 const GENIUSPAY_API_URL = 'https://pay.genius.ci/api/v1/merchant';
 
 const MANCHES = [
-  { id: 0, startH: 10, startM: 0,  endH: 10, endM: 25 },
-  { id: 1, startH: 16, startM: 0,  endH: 16, endM: 25 },
-  { id: 2, startH: 23, startM: 32, endH: 23, endM: 35 },
+  { id: 0, startH: 8,  startM: 40, endH: 8,  endM: 55 },   // 08:40 - 08:55
+  { id: 1, startH: 17, startM: 40, endH: 19, endM: 50 },   // 17:40 - 19:50
+  { id: 2, startH: 23, startM: 32, endH: 23, endM: 35 },   // 23:32 - 23:35
 ];
 
 const PASS_DEFS = {
@@ -147,28 +147,59 @@ app.get('/', (req, res) => {
 ══════════════════════════════════════════════ */
 app.post('/startArenaSession', async (req, res) => {
   try {
-    const uid      = await verifyToken(req);
+    // === LOGS DÉTAILLÉS POUR DÉBOGUER LE 403 ===
+    console.log("=== START ARENA SESSION DEBUG ===");
+    console.log("Authorization header:", req.headers.authorization);
+    
+    const uid = await verifyToken(req);
+    console.log("Decoded token UID:", uid);
+    
+    const user = await admin.auth().getUser(uid);
+    console.log("User data:", {
+      uid: user.uid,
+      email: user.email,
+      displayName: user.displayName,
+      isAnonymous: user.isAnonymous,
+      disabled: user.disabled,
+      emailVerified: user.emailVerified
+    });
+
     const mancheId = Number(req.body.mancheId);
+    console.log("Requested mancheId:", mancheId);
 
     const openManche = getOpenManche();
+    console.log("Current open manche:", openManche);
+    
     if (!openManche || openManche.id !== mancheId) {
+      console.log("❌ REASON: MANCHE_CLOSED - No open manche or wrong mancheId");
       return res.status(403).json({ error: 'MANCHE_CLOSED' });
     }
 
     const playKey = `${uid}_${todayStr()}_${mancheId}`;
+    console.log("Play key:", playKey);
+    
     const playDoc = await db.collection('arena_plays').doc(playKey).get();
+    console.log("Play document exists:", playDoc.exists);
+    
     if (playDoc.exists) {
+      console.log("❌ REASON: ALREADY_PLAYED - User already played this manche");
       return res.status(409).json({ error: 'ALREADY_PLAYED' });
     }
 
     const hasPas = await hasActiveManchePass(uid);
+    console.log("Has active manche pass:", hasPas);
+    
     if (!hasPas) {
+      console.log("❌ REASON: NO_PASS - User has no active pass");
       return res.status(402).json({ error: 'NO_PASS' });
     }
 
     const existingSnap = await db.collection('arena_sessions')
       .where('uid', '==', uid).where('status', '==', 'active').get();
+    console.log("Existing active sessions count:", existingSnap.size);
+    
     if (!existingSnap.empty) {
+      console.log("❌ REASON: SESSION_ACTIVE - User has another active session");
       return res.status(409).json({ error: 'SESSION_ACTIVE' });
     }
 
