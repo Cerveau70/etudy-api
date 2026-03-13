@@ -564,7 +564,6 @@ app.listen(PORT, () => {
 
 
 
-// GET /getUserPasses
 app.get('/getUserPasses', verifyToken, async (req, res) => {
   const uid = req.uid;
   const now = new Date();
