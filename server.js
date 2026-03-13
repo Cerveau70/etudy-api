@@ -416,9 +416,14 @@ app.post('/initPassPayment', async (req, res) => {
 ══════════════════════════════════════════════ */
 app.post('/geniusPayWebhook', async (req, res) => {
   try {
-    const signature = req.headers['x-geniuspay-signature'] ?? '';
+    // ✅ FIX: GeniusPay envoie X-Webhook-Signature (+ X-Webhook-Timestamp)
+    const signature = req.headers['x-webhook-signature'] ?? '';
+    const timestamp = req.headers['x-webhook-timestamp'] ?? '';
     const rawBody   = JSON.stringify(req.body);
-    const expected  = crypto.createHmac('sha256', GENIUSPAY_SECRET).update(rawBody).digest('hex');
+    // Signature = HMAC-SHA256(timestamp + '.' + rawBody, secret)
+    const expected  = crypto.createHmac('sha256', GENIUSPAY_SECRET)
+                            .update(timestamp + '.' + rawBody)
+                            .digest('hex');
 
     if (signature !== expected) {
       console.warn('[geniusPayWebhook] Signature invalide');
@@ -443,16 +448,34 @@ app.post('/geniusPayWebhook', async (req, res) => {
       const exp = new Date();
       exp.setDate(exp.getDate() + passDef.days);
 
-      await db.collection('user_passes').doc(tx.uid).collection('passes').doc().set({
+      // ✅ Écriture du pass dans user_passes/{uid}/passes/
+      const passRef = db.collection('user_passes').doc(tx.uid).collection('passes').doc();
+      await passRef.set({
         passId:    tx.passId,
         cat:       tx.passId.split('-')[0],
         keysLeft:  passDef.keys,
         expiresAt: admin.firestore.Timestamp.fromDate(exp),
-        txId, createdAt: admin.firestore.Timestamp.now(),
+        txId,
+        createdAt: admin.firestore.Timestamp.now(),
+      });
+
+      // ✅ Enregistrement dans passSales pour le dashboard admin
+      await db.collection('passSales').doc(passRef.id).set({
+        userId:      tx.uid,
+        passType:    tx.passId,
+        amount:      tx.amount,
+        phone:       tx.phone,
+        createdAt:   admin.firestore.Timestamp.now(),
+        expiresAt:   exp.toISOString(),
+        manchesLeft: passDef.keys,
+        status:      'active',
+        txId,
+        gpTxId,
       });
 
       await txRef.update({ status: 'completed', activatedAt: admin.firestore.Timestamp.now() });
 
+      // ✅ Notif RTDB → le client fetchPasses() automatiquement
       await rtdb.ref(`user_notifications/${tx.uid}/pass_activated`).set({
         passId: tx.passId, expiresAt: exp.toISOString(), ts: Date.now(),
       });
@@ -534,9 +557,39 @@ app.post('/sendAdminNotification', async (req, res) => {
 /* ── Start ── */
 app.listen(PORT, () => {
   console.log(`✅ ETUDY API running on port ${PORT}`);
+
+
+
+});
+
+
+
+// GET /getUserPasses
+app.get('/getUserPasses', verifyToken, async (req, res) => {
+  const uid = req.uid;
+  const now = new Date();
+  try {
+    const snap = await db.collection('user_passes').doc(uid)
+      .collection('passes')
+      .where('expiresAt', '>', now)
+      .get();
+    const passes = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(p => p.keysLeft === null || p.keysLeft > 0)
+      .map(p => ({
+        id:          p.id,
+        passType:    p.cat === 'm' ? 'manche' : p.cat === 'q' ? 'quotidien' : p.cat === '3j' ? '3jours' : 'premium',
+        manchesLeft: p.keysLeft ?? null,
+        expiresAt:   p.expiresAt.toDate().toISOString(),
+        xpBonus:     p.xpBonus ?? 0,
+      }));
+    res.json({ passes });
+  } catch (err) {
+    console.error('[getUserPasses]', err);
+    res.status(500).json({ error: 'INTERNAL' });
+  }
 });
 
 /* ══════════════════════════════════════════════
    8. getMancheStatus (Endpoint pour synchroniser l'heure avec le frontend)
 ══════════════════════════════════════════════ */
-
