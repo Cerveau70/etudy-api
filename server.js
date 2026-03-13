@@ -42,8 +42,10 @@ const QUESTIONS_PER_MANCHE = 25;
 const XP_INCORRECT         = -2;
 const XP_FLOOR             = 75;
 
-const GENIUSPAY_SECRET  = process.env.GENIUSPAY_SECRET  || '';
-const GENIUSPAY_API_URL = 'https://pay.genius.ci/api/v1/merchant';
+const GENIUSPAY_SECRET     = process.env.GENIUSPAY_SECRET     || '';  // secret webhook HMAC
+const GENIUSPAY_API_KEY    = process.env.GENIUSPAY_API_KEY    || '';  // clé publique pk_live_...
+const GENIUSPAY_API_SECRET = process.env.GENIUSPAY_API_SECRET || '';  // clé secrète sk_live_...
+const GENIUSPAY_API_URL    = 'https://pay.genius.ci/api/v1/merchant';
 
 const PASS_DEFS = {
   'm-1':       { days: 1,  keys: 1    },
@@ -367,8 +369,9 @@ app.post('/initPassPayment', async (req, res) => {
     const gpRes = await fetch(`${GENIUSPAY_API_URL}/transactions/init`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GENIUSPAY_SECRET}`,
+        'Content-Type':  'application/json',
+        'X-API-Key':     GENIUSPAY_API_KEY,     // pk_live_...
+        'Authorization': `Bearer ${GENIUSPAY_API_SECRET}`, // sk_live_...
       },
       body: JSON.stringify({
         amount, currency: 'XOF',
@@ -564,6 +567,7 @@ app.listen(PORT, () => {
 
 
 
+// GET /getUserPasses
 app.get('/getUserPasses', verifyToken, async (req, res) => {
   const uid = req.uid;
   const now = new Date();
